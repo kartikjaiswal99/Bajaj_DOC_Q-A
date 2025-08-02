@@ -186,7 +186,13 @@ async def run_submission(request: HackathonInput, Authorization: str = Header(No
     print(f"  TOTAL TIME: {total_time - start_time:.2f}s for {len(chunked_documents)} documents")
     print(f"  Performance: {len(chunked_documents) / (total_time - start_time):.1f} docs/second")
     
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 10})  # Increased for better accuracy    # Step 3: Create the main RAG chain.
+    retriever = vectorstore.as_retriever(
+        search_type="similarity", 
+        search_kwargs={
+            "k": 20,  # Retrieve more documents for better coverage
+            "fetch_k": 50  # Fetch more candidates before filtering
+        }
+    )    # Step 3: Create the main RAG chain.
     main_chain = create_rag_chain(retriever)
 
     # Step 4: Process questions concurrently for maximum speed

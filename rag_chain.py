@@ -30,20 +30,37 @@ def create_rag_chain(retriever):
 
 
     # Chain 2: Sub-Question Generator
-    def generate_sub_questions(parsed_query: dict) -> List[str]:
-        questions: List[str] = []
+    def generate_sub_questions(parsed_query: dict, original_question: str) -> List[str]:
+        """Generate comprehensive sub-questions for better retrieval"""
+        questions = [original_question]  # Always include the original question
         procedure = parsed_query.get("procedure")
-        entities = parsed_query.get("entities",)
+        entities = parsed_query.get("entities", [])
 
         if procedure:
-            questions.append(f"What are the policy rules, coverage, and conditions for '{procedure}'?")
+            questions.extend([
+                f"What are the specific terms, conditions, and coverage details for {procedure}?",
+                f"What are the exclusions, waiting periods, or limitations for {procedure}?",
+                f"What are the eligibility criteria and requirements for {procedure}?",
+                f"Are there any age restrictions, time limits, or special conditions for {procedure}?"
+            ])
 
         for entity in entities:
-            questions.append(f"What does the policy say about '{entity}' in relation to '{procedure if procedure else 'the claim'}'?")
+            if entity and len(entity.strip()) > 2:  # Only meaningful entities
+                questions.extend([
+                    f"What does the policy specifically say about {entity}?",
+                    f"How does {entity} affect coverage or benefits?",
+                    f"Are there specific rules or conditions related to {entity}?"
+                ])
 
-        questions.append("Are there any general exclusions or waiting periods that might apply?")
+        # Add general comprehensive questions for insurance policies
+        questions.extend([
+            "What are the grace periods, waiting periods, and renewal conditions?",
+            "What are the general exclusions and limitations in this policy?",
+            "What are the claim procedures and documentation requirements?",
+            "What are the benefit limits, sub-limits, and maximum amounts covered?"
+        ])
 
-        return list(set(questions))
+        return list(set(questions))  # Remove duplicates
     
     # Chain 3: Evidence Retrieval and Answering
     rag_prompt = ChatPromptTemplate.from_template(
@@ -56,9 +73,39 @@ def create_rag_chain(retriever):
     )
 
 
+    # ACCURACY-OPTIMIZED: Enhanced retrieval with better context formatting
     def retrieve_and_format_context(sub_question: str) -> str:
-        docs = retriever.invoke(sub_question, k=10)
-        return "\n\n".join([doc.page_content for doc in docs])
+        """Retrieve and format context with relevance scoring"""
+        docs = retriever.invoke(sub_question, k=15)  # Increased from 10 to 15
+        
+        if not docs:
+            return "No relevant information found in the document."
+        
+        formatted_chunks = []
+        for i, doc in enumerate(docs):
+            chunk_text = doc.page_content.strip()
+            chunk_meta = doc.metadata
+            
+            # Add source and position context
+            source_info = f"[Chunk {chunk_meta.get('chunk_id', i)}/{chunk_meta.get('total_chunks', 'N/A')}]"
+            formatted_chunks.append(f"{source_info}\n{chunk_text}")
+        
+        return "\n\n---\n\n".join(formatted_chunks)
+
+    # Chain 3: Enhanced Evidence Retrieval and Answering  
+    rag_prompt = ChatPromptTemplate.from_template(
+        "You are an expert insurance policy analyst. Extract the EXACT information that answers the sub-question.\n\n"
+        "CRITICAL RULES:\n"
+        "1. Quote specific numbers, percentages, time periods, and amounts EXACTLY as written\n"
+        "2. Include ALL relevant conditions, exclusions, and requirements\n"
+        "3. If multiple conditions exist, list them all\n"
+        "4. If information is not found, state 'Information not found in provided context'\n"
+        "5. Do NOT make assumptions or generalizations\n"
+        "6. Use direct quotes from the policy when possible\n\n"
+        "Context from Policy Document:\n{context}\n\n"
+        "Sub-question: {sub_question}\n\n"
+        "Extract and provide the precise answer with exact quotes and references:"
+    )
 
 
 
@@ -72,20 +119,20 @@ def create_rag_chain(retriever):
 
 
 
-    # Chain 4: Final Synthesis
+    # Chain 4: ACCURACY-OPTIMIZED Final Synthesis
     final_prompt = ChatPromptTemplate.from_template(
-        "You are an expert AI assistant for an insurance company. Your task is to provide a clear, concise, and factual answer to the user's question based *only* on the provided evidence from the policy document.\n\n"
-        "**CRITICAL INSTRUCTIONS:**\n"
-        "1. Synthesize the evidence to form a single, direct answer.\n"
-        "2. The answer must be a complete sentence or two, directly addressing the user's question.\n"
-        "3. Do NOT add any conversational fluff, apologies, or introductory phrases like 'Based on the evidence...'.\n"
-        "4. If the evidence is insufficient to form a definitive answer, state that the information is not specified in the document.\n"
-        "5. Emulate the style of a professional policy expert providing a definitive clarification.\n\n"
-        "**Original Question:** {question}\n\n"
-        "--- Evidence Gathered ---\n{evidence}\n--- End of Evidence ---\n\n"
-        "Based *only* on the evidence above, provide the final, direct answer.\n"
+        "You are an expert insurance policy analyst. Synthesize the evidence to provide a precise, complete answer.\n\n"
+        "SYNTHESIS RULES:\n"
+        "1. Extract and combine ALL relevant facts from the evidence\n"
+        "2. Include specific numbers, time periods, conditions, and requirements\n"
+        "3. If evidence contains conflicting information, mention both\n"
+        "4. If insufficient evidence, state 'The policy document does not specify this information'\n"
+        "5. Provide a direct, factual answer without conversational phrases\n"
+        "6. Include exact quotes when they directly answer the question\n\n"
+        "ORIGINAL QUESTION: {question}\n\n"
+        "EVIDENCE FROM POLICY:\n{evidence}\n\n"
+        "Synthesize the evidence into a complete, accurate answer:\n"
         "{format_instructions}"
-
     )
 
     final_parser = JsonOutputParser(pydantic_object=FinalAnswer)
@@ -96,7 +143,7 @@ def create_rag_chain(retriever):
         question = input_dict["question"]
         try:
             parsed = parsing_chain.invoke({"question": question})
-            sub_questions = generate_sub_questions(parsed)  # Add missing question argument
+            sub_questions = generate_sub_questions(parsed, question)  # Add missing question argument
             evidence_list = evidence_chain.batch(sub_questions)
             formatted_evidence = "\n\n".join(f"Evidence for '{q}':\n{a}" for q, a in zip(sub_questions, evidence_list))
             

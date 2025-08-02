@@ -124,12 +124,29 @@ def build_knowledge_base_from_urls(document_url: str) -> List:  # Changed from T
     if not docs_with_metadata:
         return []  # Return empty list instead of None
 
-    # Improved text splitter settings for better accuracy
+    # ACCURACY-OPTIMIZED: Larger chunks with smart splitting for insurance documents
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=300, 
-        chunk_overlap=100,
-        separators=["\n\n", "\n", ". ", " ", ""]
+        chunk_size=1500,  # Much larger for complete context
+        chunk_overlap=300,  # Substantial overlap to preserve connections
+        separators=[
+            "\n\n",  # Paragraph breaks
+            "\n",    # Line breaks
+            ". ",    # Sentence endings
+            "; ",    # Clause separators
+            ", ",    # Sub-clause separators
+            " "      # Word boundaries
+        ],
+        keep_separator=True  # Preserve separators for better context
     )
     chunked_docs = text_splitter.split_documents(docs_with_metadata)
-    print(f"Split documents into {len(chunked_docs)} chunks.")
+    
+    # Add document structure metadata for better retrieval
+    for i, doc in enumerate(chunked_docs):
+        doc.metadata.update({
+            "chunk_id": i,
+            "total_chunks": len(chunked_docs),
+            "file_type": file_name.split('.')[-1].lower() if '.' in file_name else 'unknown'
+        })
+    
+    print(f"Split documents into {len(chunked_docs)} chunks with enhanced metadata.")
     return chunked_docs
