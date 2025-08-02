@@ -53,12 +53,29 @@ async def run_submission(request: HackathonInput, Authorization: str = Header(No
             spec=ServerlessSpec(cloud='aws', region='us-east-1')
         )
     
-    # Upsert documents into Pinecone.
-    vectorstore = PineconeVectorStore.from_documents(
-        chunked_documents,
-        index_name=PINECONE_INDEX_NAME,
-        embedding=embeddings_model
-    )
+    # # Upsert documents into Pinecone.
+    # vectorstore = PineconeVectorStore.from_documents(
+    #     chunked_documents,
+    #     index_name=PINECONE_INDEX_NAME,
+    #     embedding=embeddings_model
+    # )
+    
+    # FIX: Use batching to add documents to Pinecone, avoiding OpenAI token limits.
+
+    print("Upserting documents to Pinecone in batches...")
+
+    vectorstore = PineconeVectorStore(index_name=PINECONE_INDEX_NAME, embedding=embeddings_model)
+
+    batch_size = 100
+
+    for i in range(0, len(chunked_documents), batch_size):
+
+        batch = chunked_documents[i:i + batch_size]
+
+        vectorstore.add_documents(batch)
+
+        print(f"  - Upserted batch {i // batch_size + 1}")
+        
     retriever = vectorstore.as_retriever()
 
     # Step 3: Create the main RAG chain.

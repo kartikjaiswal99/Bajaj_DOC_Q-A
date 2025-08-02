@@ -126,8 +126,8 @@ def build_knowledge_base_from_urls(document_url: str) -> List:  # Changed from T
 
     # Improved text splitter settings for better accuracy
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=2000, 
-        chunk_overlap=400,
+        chunk_size=300, 
+        chunk_overlap=100,
         separators=["\n\n", "\n", ". ", " ", ""]
     )
     chunked_docs = text_splitter.split_documents(docs_with_metadata)
