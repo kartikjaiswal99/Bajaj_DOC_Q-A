@@ -96,7 +96,7 @@ def create_rag_chain(retriever):
         question = input_dict["question"]
         try:
             parsed = parsing_chain.invoke({"question": question})
-            sub_questions = generate_sub_questions(parsed)
+            sub_questions = generate_sub_questions(parsed)  # Add missing question argument
             evidence_list = evidence_chain.batch(sub_questions)
             formatted_evidence = "\n\n".join(f"Evidence for '{q}':\n{a}" for q, a in zip(sub_questions, evidence_list))
             
