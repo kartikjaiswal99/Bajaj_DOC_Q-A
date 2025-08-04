@@ -119,10 +119,22 @@ def build_knowledge_base_from_urls(document_url: str) -> List:
     if not docs_with_metadata:
         return []  
 
+    # OPTIMIZED: Smaller chunk size for large documents to avoid token limits
+    # Estimate document size to adjust chunk size
+    total_text_length = sum(len(doc.page_content) for doc in docs_with_metadata)
+
+    if total_text_length > 500000:  # Very large document (>500k chars)
+        chunk_size = 800   # Smaller chunks for very large docs
+        chunk_overlap = 100
+        print(f"Very large document detected ({total_text_length:,} chars), using smaller chunks")
+    else:
+        chunk_size = 1000  # Normal chunk size
+        chunk_overlap = 150
+
     # SPEED-OPTIMIZED: Balanced chunk size for performance
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1200,      # Slightly smaller for faster processing
-        chunk_overlap=200,    # Reduced overlap for speed
+        chunk_size=chunk_size,      # Slightly smaller for faster processing
+        chunk_overlap=chunk_overlap,    # Reduced overlap for speed
         separators=["\n\n", "\n", ". ", " "],
         keep_separator=True  # Preserve separators for better context
     )

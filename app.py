@@ -6,14 +6,15 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi import FastAPI, HTTPException, Header
 from langchain_openai import OpenAIEmbeddings
-# from langchain_community.vectorstores import FAISS
 from langchain_community.vectorstores import FAISS 
 
+import math
 from openai import RateLimitError
 
 from schemas import HackathonInput, HackathonOutput
 from document_processor import build_knowledge_base_from_urls
 from rag_chain import create_rag_chain
+
 import os
 from dotenv import load_dotenv
 
@@ -27,6 +28,48 @@ app = FastAPI(
 
 # --- Caching for Document Processing ---
 cached_build_knowledge_base = lru_cache(maxsize=10)(build_knowledge_base_from_urls)
+
+def create_vectorstore_with_batched_embeddings(chunked_documents, embeddings_model):
+    """Create FAISS vectorstore with batched embeddings to handle large documents"""
+    
+    # Calculate safe batch size (aim for ~250k tokens per batch, with safety margin)
+    # Assuming average 150 tokens per chunk
+    max_chunks_per_batch = 1000  # Conservative estimate for safety
+    
+    if len(chunked_documents) <= max_chunks_per_batch:
+        # Small document - process normally
+        print(f"Processing {len(chunked_documents)} chunks in single batch")
+        return FAISS.from_documents(chunked_documents, embeddings_model)
+    
+    # Large document - process in batches
+    print(f" Large document detected: {len(chunked_documents)} chunks")
+    print(f" Processing in batches of {max_chunks_per_batch} chunks...")
+    
+    # Process first batch to create initial vectorstore
+    first_batch = chunked_documents[:max_chunks_per_batch]
+    print(f"Batch 1: {len(first_batch)} chunks")
+    vectorstore = FAISS.from_documents(first_batch, embeddings_model)
+    
+    # Process remaining batches and add to vectorstore
+    num_batches = math.ceil(len(chunked_documents) / max_chunks_per_batch)
+    
+    for i in range(1, num_batches):
+        start_idx = i * max_chunks_per_batch
+        end_idx = min((i + 1) * max_chunks_per_batch, len(chunked_documents))
+        batch = chunked_documents[start_idx:end_idx]
+        print(f"Batch {i + 1}: {len(batch)} chunks")
+        
+        try:
+            # Add documents to existing vectorstore
+            vectorstore.add_documents(batch)
+        except Exception as e:
+            print(f" Error in batch {i + 1}: {e}")
+            # Continue processing other batches
+            continue
+    
+    print(f"Successfully processed {len(chunked_documents)} chunks in {num_batches} batches")
+    return vectorstore
+
 
 @app.post("/hackrx/run", response_model=HackathonOutput)
 async def run_submission(request: HackathonInput, Authorization: str = Header(None)):
@@ -46,18 +89,29 @@ async def run_submission(request: HackathonInput, Authorization: str = Header(No
     print(f"Creating optimized FAISS vectorstore for {len(chunked_documents)} documents...")
     start_time = time.time()
     
-    # Create FAISS vectorstore with speed optimizations
-    vectorstore = FAISS.from_documents(
-        documents=chunked_documents,
-        embedding=embeddings_model
-    )
+    # Initialize embeddings model
+    embeddings_model = OpenAIEmbeddings(model="text-embedding-3-small")
+    
+    # Handle large documents with batched processing
+    try:
+        vectorstore = create_vectorstore_with_batched_embeddings(chunked_documents, embeddings_model)
+    except Exception as e:
+        print(f"Error creating vectorstore: {e}")
+        raise HTTPException(status_code=500, detail=f"Error processing document: {str(e)}")
+
+
+    # # Create FAISS vectorstore with speed optimizations
+    # vectorstore = FAISS.from_documents(
+    #     documents=chunked_documents,
+    #     embedding=embeddings_model
+    # )
     
     # Create SPEED-OPTIMIZED retriever 
     retriever = vectorstore.as_retriever(
         search_type="similarity",  # Faster than MMR
         search_kwargs={
-            "k": 8,               # Reduced for speed
-            "fetch_k": 15         # Reduced pre-filter candidates
+            "k": 6               # Reduced for speed
+            # "fetch_k": 15         # Reduced pre-filter candidates
         }
     )
     
@@ -86,7 +140,10 @@ async def run_submission(request: HackathonInput, Authorization: str = Header(No
     
     # Process questions in parallel with optimized workers and NO TIMEOUT
     final_answers = [None] * len(request.questions)
-    with ThreadPoolExecutor(max_workers=4) as executor:  # Increased to 4 for speed
+    max_workers = 2 if len(chunked_documents) > 1000 else 3  # Reduce workers for large docs
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    # with ThreadPoolExecutor(max_workers=4) as executor:  # Increased to 4 for speed
         future_to_idx = {
             executor.submit(process_single_question, question, i): i 
             for i, question in enumerate(request.questions)
