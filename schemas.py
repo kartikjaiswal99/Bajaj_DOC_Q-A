@@ -1,16 +1,11 @@
-# ==============================================================================
-#
-#           DATA SCHEMAS (Pydantic Models)
-#
-# Schemas for the external API and our internal reasoning process.
-# ==============================================================================
+#DATA SCHEMAS (Pydantic Models)
 
 from typing import List, Optional
 from pydantic import BaseModel as FastApiBaseModel, BaseModel, Field
 
 # --- Hackathon API Schemas (Request and Response) ---
 class HackathonInput(FastApiBaseModel):
-    documents: str  # Changed from List[str] to str for single document
+    documents: str 
     questions: List[str]
 
 class HackathonOutput(FastApiBaseModel):

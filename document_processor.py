@@ -1,9 +1,4 @@
-# ==============================================================================
-#
-#           DOCUMENT PROCESSING UTILITIES
-#
-# Functions for downloading and processing documents from URLs
-# ==============================================================================
+#DOCUMENT PROCESSING UTILITIES
 
 import email
 from functools import lru_cache
@@ -71,7 +66,7 @@ def _extract_text_from_eml(file_path: str) -> str:
 
 
 @lru_cache(maxsize=10)
-def build_knowledge_base_from_urls(document_url: str) -> List:  # Changed from Tuple[str,...] to str
+def build_knowledge_base_from_urls(document_url: str) -> List:  
     """
     Downloads a document from URL, extracts text using appropriate parser, and splits
     it into chunks. Supports PDF, Word documents, and email formats.
@@ -81,20 +76,20 @@ def build_knowledge_base_from_urls(document_url: str) -> List:  # Changed from T
     
     with tempfile.TemporaryDirectory() as temp_dir:
         try:
-            response = requests.get(document_url)  # Changed from url to document_url
+            response = requests.get(document_url) 
             response.raise_for_status()
             
             # file_name = os.path.basename(url.split('?'))
-            file_name = os.path.basename(document_url.split('?')[0])  # Changed from url to document_url
+            file_name = os.path.basename(document_url.split('?')[0])  
             if not file_name:
-                if '.docx' in document_url.lower():  # Changed from url to document_url
+                if '.docx' in document_url.lower():  
                     file_name = "document.docx"
-                elif '.eml' in document_url.lower():  # Changed from url to document_url
+                elif '.eml' in document_url.lower(): 
                     file_name = "document.eml"
                 else:
                     file_name = "document.pdf"
             
-            temp_path = os.path.join(temp_dir, file_name)  # Fixed indentation and moved outside if block
+            temp_path = os.path.join(temp_dir, file_name)  
             
             with open(temp_path, 'wb') as f:
                 f.write(response.content)
@@ -110,43 +105,35 @@ def build_knowledge_base_from_urls(document_url: str) -> List:  # Changed from T
                 text_content = _extract_text_from_eml(temp_path)
             else:
                 print(f"  - Unsupported file type: {file_name}. Skipping.")
-                return []  # Return empty list instead of None
+                return []  
             
             docs_with_metadata.append(Document(page_content=text_content, metadata={"source_url": document_url}))
 
         except requests.RequestException as e:
             print(f"  - Failed to download {document_url}. Error: {e}")
-            return []  # Return empty list instead of continuing
+            return []  
         except Exception as e:
             print(f"  - Failed to process {document_url}. Error: {e}")
-            return []  # Return empty list instead of continuing
+            return [] 
 
     if not docs_with_metadata:
-        return []  # Return empty list instead of None
+        return []  
 
-    # ACCURACY-OPTIMIZED: Larger chunks with smart splitting for insurance documents
+    # SPEED-OPTIMIZED: Balanced chunk size for performance
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1500,  # Much larger for complete context
-        chunk_overlap=300,  # Substantial overlap to preserve connections
-        separators=[
-            "\n\n",  # Paragraph breaks
-            "\n",    # Line breaks
-            ". ",    # Sentence endings
-            "; ",    # Clause separators
-            ", ",    # Sub-clause separators
-            " "      # Word boundaries
-        ],
+        chunk_size=1200,      # Slightly smaller for faster processing
+        chunk_overlap=200,    # Reduced overlap for speed
+        separators=["\n\n", "\n", ". ", " "],
         keep_separator=True  # Preserve separators for better context
     )
     chunked_docs = text_splitter.split_documents(docs_with_metadata)
     
-    # Add document structure metadata for better retrieval
+    # Add minimal metadata for faster processing
     for i, doc in enumerate(chunked_docs):
         doc.metadata.update({
             "chunk_id": i,
-            "total_chunks": len(chunked_docs),
             "file_type": file_name.split('.')[-1].lower() if '.' in file_name else 'unknown'
         })
     
-    print(f"Split documents into {len(chunked_docs)} chunks with enhanced metadata.")
+    print(f"Split documents into {len(chunked_docs)} chunks optimized for speed.")
     return chunked_docs
