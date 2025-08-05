@@ -7,10 +7,8 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnableLambda
 
 def create_rag_chain(retriever):
-    # Fast model with minimal temperature
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)  # Using mini for speed
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     
-    # ULTRA-FAST: Direct retrieval and formatting
     def get_context_fast(question: str) -> str:
         """Ultra-fast context retrieval with minimal processing"""
         try:
@@ -18,57 +16,45 @@ def create_rag_chain(retriever):
             if not docs:
                 return "No relevant information found."
             
-            # Minimal formatting for maximum speed
+            # Limit to top 6 docs for speed
             context_parts = []
-            for i, doc in enumerate(docs[:10]):  # Top 10 docs only
+            for i, doc in enumerate(docs[:6]):  # Reduced from 10 to 6
                 content = doc.page_content.strip()
-                context_parts.append(f"[{i+1}] {content}")
+                section = doc.metadata.get("section_header", "")
+                if section:
+                    context_parts.append(f"[{i+1}] Section: {section}\n{content[:800]}...")  # Truncate content
+                else:
+                    context_parts.append(f"[{i+1}] {content[:800]}...")  # Truncate content
             
             return "\n\n".join(context_parts)
         except Exception:
             return "Error retrieving context."
     
-    # CONCISE but ACCURATE prompt - optimized for brief, focused answers
+    # More concise prompt for faster processing
     fast_prompt = ChatPromptTemplate.from_template("""
-        You are an expert insurance policy analyst. Provide concise, accurate answers based strictly on the policy content below.
-
-        ANSWER REQUIREMENTS:
-        - Be direct and concise (1-3 sentences maximum)
-        - Include only the essential details: key time periods, amounts, main conditions
-        - Focus on answering the specific question asked
-        - Use exact figures and terminology from the policy
-        - If information is not in the context, state "Not specified in policy"
+        Answer the question based on the policy content below. Be direct and concise (1-2 sentences).
 
         POLICY CONTENT:
         {context}
 
         QUESTION: {question}
 
-        CONCISE ANSWER:""")
+        ANSWER:""")
     
-    # ULTRA-FAST: Direct chain without complex orchestration
     def fast_rag_logic(inputs):
         question = inputs["question"]
         try:
-            # Direct retrieval and answer generation
             context = get_context_fast(question)
-            
-            # Fast synthesis
             chain = fast_prompt | llm | StrOutputParser()
             answer = chain.invoke({
                 "context": context,
                 "question": question
             })
-            
-            # Ensure answer is concise
             answer = answer.strip()
-            if len(answer) > 300:  # Limit length
-                # Take first sentence if too long
+            if len(answer) > 200:  # Reduced from 300 to 200
                 sentences = answer.split('.')
-                answer = sentences[0] + '.' if sentences else answer[:300]
-            
+                answer = sentences[0] + '.' if sentences else answer[:200]
             return {"answer": answer}
-            
         except Exception as e:
             print(f"Fast RAG error: {e}")
             return {"answer": "Unable to determine from provided context."}
