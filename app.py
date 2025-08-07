@@ -22,6 +22,7 @@ from dotenv import load_dotenv
 # Load environment variables first
 load_dotenv()
 
+
 app = FastAPI(
     title="Advanced Document Q&A System",
     description="An API that answers questions based on a given set of documents."
@@ -42,15 +43,12 @@ def create_vectorstore_with_batched_embeddings(chunked_documents, embeddings_mod
     current_batch = []
     current_tokens = 0
     
-    print(f"Creating token-based batches for {len(chunked_documents)} chunks...")
-    
     for doc in chunked_documents:
         doc_tokens = estimate_tokens(doc.page_content)
         
         # If adding this document would exceed the token limit, start a new batch
         if current_tokens + doc_tokens > MAX_TOKENS_PER_BATCH and current_batch:
             batches.append(current_batch)
-            print(f"Batch {len(batches)}: {len(current_batch)} chunks, ~{current_tokens:,} tokens")
             current_batch = []
             current_tokens = 0
         
@@ -60,40 +58,30 @@ def create_vectorstore_with_batched_embeddings(chunked_documents, embeddings_mod
     # Add the last batch
     if current_batch:
         batches.append(current_batch)
-        print(f"Batch {len(batches)}: {len(current_batch)} chunks, ~{current_tokens:,} tokens")
-    
-    print(f"Created {len(batches)} batches for embedding")
     
     if not batches:
         raise Exception("No documents to process")
     
     # Create the vectorstore from the first batch
-    print(f"Processing first batch with {len(batches[0])} chunks...")
     vectorstore = FAISS.from_documents(batches[0], embeddings_model)
     
     # Add remaining batches
     for i, batch in enumerate(batches[1:], 2):
-        print(f"Processing batch {i} with {len(batch)} chunks...")
         try:
             vectorstore.add_documents(batch)
         except Exception as e:
-            print(f"Error in batch {i}: {e}")
             # Try with smaller sub-batches if it's a token limit issue
             if "max_tokens_per_request" in str(e) and len(batch) > 10:
-                print(f"Token limit exceeded, retrying batch {i} with smaller chunks...")
                 sub_batch_size = len(batch) // 2
                 for j in range(0, len(batch), sub_batch_size):
                     sub_batch = batch[j:j + sub_batch_size]
                     try:
                         vectorstore.add_documents(sub_batch)
-                        print(f"  Sub-batch {j//sub_batch_size + 1} added successfully")
                     except Exception as sub_e:
-                        print(f"  Sub-batch {j//sub_batch_size + 1} failed: {sub_e}")
                         continue
             else:
                 continue
     
-    print(f"Successfully processed {len(chunked_documents)} chunks in {len(batches)} token-based batches")
     return vectorstore
 
 def rerank_chunks(query, docs, llm=None, fast_mode=False):
@@ -151,15 +139,11 @@ async def run_submission(request: HackathonInput):
     embeddings_model = OpenAIEmbeddings(model="text-embedding-3-small")
     
     # Step 1: Download, process, and chunk documents from the provided URL.
-    print(f"Starting document processing for: {request.documents}")
     chunked_documents = cached_build_knowledge_base(request.documents)
     if not chunked_documents:
         raise HTTPException(status_code=400, detail="Error: Could not process the provided document.")
     
-    print(f"Document processing completed. Total chunks: {len(chunked_documents)}")
-    
     # Step 2: ULTRA-FAST FAISS local vector database (optimized)
-    print(f"Creating optimized FAISS vectorstore for {len(chunked_documents)} documents...")
     start_time = time.time()
     
     # Initialize embeddings model
@@ -169,7 +153,6 @@ async def run_submission(request: HackathonInput):
     try:
         vectorstore = create_vectorstore_with_batched_embeddings(chunked_documents, embeddings_model)
     except Exception as e:
-        print(f"Error creating vectorstore: {e}")
         raise HTTPException(status_code=500, detail=f"Error processing document: {str(e)}")
 
     # Create SPEED-OPTIMIZED retriever 
@@ -181,13 +164,11 @@ async def run_submission(request: HackathonInput):
     )
     
     embed_time = time.time()
-    print(f"FAISS vectorstore created in {embed_time - start_time:.2f}s")
     
     # Step 3: Create the main RAG chain
     main_chain = create_rag_chain(retriever)
 
     # Step 4: ULTRA-FAST question processing without timeout constraints
-    print(f"Processing {len(request.questions)} questions with optimized speed...")
     question_start_time = time.time()
     
     llm_rerank = ChatOpenAI(model="gpt-4o-mini", temperature=0)
@@ -196,21 +177,17 @@ async def run_submission(request: HackathonInput):
         """Process a single question optimized for speed"""
         try:
             start = time.time()
-            print(f"Processing Q{question_idx + 1}: {question[:50]}...")
             
             # Retrieve top-k docs
             docs = retriever.invoke(question)
-            print(f"Retrieved {len(docs)} chunks for Q{question_idx + 1}")
             
             # Fast mode: skip reranking for speed
             fast_mode = len(request.questions) > 3 or len(chunked_documents) > 1000
             if fast_mode:
-                print(f"Using fast mode for Q{question_idx + 1} (skipping reranking)")
                 top_docs = docs[:6]  # Use top 6 without reranking
             else:
                 # Rerank only for small document/question sets
                 reranked_docs = rerank_chunks(question, docs, llm=llm_rerank, fast_mode=False)
-                print(f"Reranked to {len(reranked_docs)} chunks for Q{question_idx + 1}")
                 top_docs = reranked_docs[:6]
             
             # Create a new retriever-like object for these docs
@@ -223,10 +200,8 @@ async def run_submission(request: HackathonInput):
             response_dict = custom_chain.invoke({"question": question})
             end = time.time()
             answer = response_dict.get("answer", "Unable to determine from provided context.")
-            print(f"Q{question_idx + 1} answered in {end - start:.2f}s")
             return answer
         except Exception as e:
-            print(f"Error processing Q{question_idx + 1}: {e}")
             return "Unable to determine from provided context."
     
     # Process questions in parallel with optimized workers and NO TIMEOUT
@@ -239,8 +214,6 @@ async def run_submission(request: HackathonInput):
         max_workers = 4  # More workers for many questions
     else:
         max_workers = 2  # Fewer workers for small sets
-    
-    print(f"Using {max_workers} parallel workers for question processing")
     
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_idx = {
@@ -255,12 +228,9 @@ async def run_submission(request: HackathonInput):
                 answer = future.result()  # No timeout - let it complete
                 final_answers[question_idx] = answer
             except Exception as e:
-                print(f"Question {question_idx + 1} error: {e}")
                 final_answers[question_idx] = "Unable to determine from provided context."
     
     question_end_time = time.time()
     total_time = question_end_time - start_time
-    print(f"TOTAL TIME: {total_time:.2f}s for {len(chunked_documents)} docs + {len(request.questions)} questions")
-    print(f"Average per question: {(question_end_time - question_start_time) / len(request.questions):.2f}s")
 
     return HackathonOutput(answers=final_answers)

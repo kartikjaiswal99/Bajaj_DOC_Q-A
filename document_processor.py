@@ -19,8 +19,6 @@ def _extract_text_from_pdf_batched(file_path: str, max_chars_per_batch: int = 50
     text = ""
     total_pages = len(doc)
     
-    print(f"Processing PDF with {total_pages} pages")
-    
     # Process pages in batches to avoid memory issues
     batch_size = max(1, total_pages // 10)  # Process in ~10 batches
     current_batch_text = ""
@@ -35,7 +33,6 @@ def _extract_text_from_pdf_batched(file_path: str, max_chars_per_batch: int = 50
         if len(current_batch_text) > max_chars_per_batch:
             text += current_batch_text
             current_batch_text = ""
-            print(f"Processed batch up to page {page_num + 1}/{total_pages}")
     
     # Add remaining text
     if current_batch_text:
@@ -49,7 +46,6 @@ def _extract_text_from_pdf(file_path: str) -> str:
     try:
         return _extract_text_from_pdf_batched(file_path)
     except Exception as e:
-        print(f"Batched extraction failed, trying standard method: {e}")
         # Fallback to original method
         doc = fitz.open(file_path)
         text = ""
@@ -109,7 +105,6 @@ def structure_aware_chunking(text: str) -> List[Tuple[str, str]]:
     """
     # Estimate document size
     text_length = len(text)
-    print(f"Processing document of {text_length:,} characters")
     
     # Simplified regex for headings: lines in ALL CAPS or starting with numbers
     heading_regex = re.compile(r'(^[A-Z][A-Z0-9\-\s:]{3,}$|^\d+\. .+)', re.MULTILINE)
@@ -173,7 +168,6 @@ def structure_aware_chunking(text: str) -> List[Tuple[str, str]]:
                 if len(para.strip()) > 100:
                     chunks.append((section_header, para.strip()))
     
-    print(f"Created {len(chunks)} chunks from {len(matches)} sections")
     return chunks
 
 
@@ -184,7 +178,6 @@ def build_knowledge_base_from_urls(document_url: str) -> List:
     it into chunks. Supports PDF, Word documents, and email formats.
     Handles very large documents with progressive processing.
     """
-    print(f"Building knowledge base for: {document_url}")
     docs_with_metadata: List = []
     
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -202,7 +195,6 @@ def build_knowledge_base_from_urls(document_url: str) -> List:
             temp_path = os.path.join(temp_dir, file_name)  
             with open(temp_path, 'wb') as f:
                 f.write(response.content)
-            print(f"  - Processing {file_name}...")
             text_content = ""
             if file_name.lower().endswith('.pdf'):
                 text_content = _extract_text_from_pdf(temp_path)
@@ -211,12 +203,10 @@ def build_knowledge_base_from_urls(document_url: str) -> List:
             elif file_name.lower().endswith('.eml'):
                 text_content = _extract_text_from_eml(temp_path)
             else:
-                print(f"  - Unsupported file type: {file_name}. Skipping.")
                 return []  
             
             # Check if document is too large and process in chunks if needed
             if len(text_content) > 1000000:  # 1MB threshold
-                print(f"Large document detected ({len(text_content):,} chars), processing in sections")
                 docs_with_metadata = process_large_document(text_content, document_url, file_name)
             else:
                 # Structure-aware chunking for normal documents
@@ -232,14 +222,11 @@ def build_knowledge_base_from_urls(document_url: str) -> List:
                         }
                     ))
         except requests.RequestException as e:
-            print(f"  - Failed to download {document_url}. Error: {e}")
             return []  
         except Exception as e:
-            print(f"  - Failed to process {document_url}. Error: {e}")
             return [] 
     if not docs_with_metadata:
         return []  
-    print(f"Split documents into {len(docs_with_metadata)} structure-aware chunks optimized for speed and context.")
     return docs_with_metadata
 
 def process_large_document(text_content: str, document_url: str, file_name: str) -> List:
@@ -252,13 +239,9 @@ def process_large_document(text_content: str, document_url: str, file_name: str)
     section_size = 500000  # 500KB sections
     section_count = 0
     
-    print(f"Processing large document in {section_size:,} character sections")
-    
     for i in range(0, total_length, section_size):
         section_text = text_content[i:i + section_size]
         section_count += 1
-        
-        print(f"Processing section {section_count} ({len(section_text):,} chars)")
         
         # Process this section with structure-aware chunking
         chunk_tuples = structure_aware_chunking(section_text)
@@ -275,5 +258,4 @@ def process_large_document(text_content: str, document_url: str, file_name: str)
                 }
             ))
     
-    print(f"Processed {section_count} sections into {len(docs_with_metadata)} chunks")
     return docs_with_metadata

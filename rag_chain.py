@@ -56,7 +56,6 @@ def create_rag_chain(retriever):
                 answer = sentences[0] + '.' if sentences else answer[:200]
             return {"answer": answer}
         except Exception as e:
-            print(f"Fast RAG error: {e}")
             return {"answer": "Unable to determine from provided context."}
     
     return RunnableLambda(fast_rag_logic)
