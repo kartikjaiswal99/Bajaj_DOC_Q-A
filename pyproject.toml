@@ -1,7 +1,7 @@
 [project]
 name = "chodu"
 version = "0.1.0"
-description = "A project using FastAPI, LangChain, Pinecone, and more"
+description = "A project using FastAPI, LangChain, and more"
 authors = [
     { name="Kartik"}
 ]
@@ -9,18 +9,16 @@ requires-python = ">=3.8"
 
 dependencies = [
     "fastapi",
-    "uvicorn[standard]",
+    "uvicorn",
     "langchain",
     "langchain-openai",
-    "langchain-pinecone",
     "langchain-community",
     "faiss-cpu",
-    "pinecone-client",
     "pymupdf",
     "python-docx",
-    "pydantic",
     "python-dotenv",
-    "requests"
+    "requests",
+    "rank_bm25"
 ]
 
 [tool.uv]
