@@ -1,3 +1,144 @@
-.env
-venv/
+# Python Cache and Virtual Environment
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment Configuration
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Application Logs
+logs/
+*.log
+app.log
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Temporary Files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Document Cache
+document_cache/
+.cache/
+
+# Model Artifacts
+models/
+*.pkl
+*.joblib
+
+# Test Coverage
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# PyCharm
+.idea/
+
+# Spyder
+.spyderproject
+.spyproject
+
+# Rope
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Vector store indices
+*.faiss
+*.index
+
+# Docker
+.dockerignore
+Dockerfile
+docker-compose.yml
+docker-compose.override.yml
+
+# API Keys and Secrets (additional safety)
+*.pem
+*.key
+*.crt
+secrets/
+api_keys/
+
+# System files
+.system
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.nfs*
+
+# Application specific
+uploads/
+downloads/
+processed_documents/
+vector_indices/

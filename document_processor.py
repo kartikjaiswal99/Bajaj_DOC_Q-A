@@ -1,4 +1,48 @@
-#DOCUMENT PROCESSING UTILITIES
+# ==============================================================================
+#                        DOCUMENT PROCESSING UTILITIES
+# ==============================================================================
+#
+# This module provides comprehensive document processing capabilities for the
+# Advanced Document Q&A System. It handles downloading, text extraction, and
+# intelligent chunking of documents from various formats.
+#
+# SUPPORTED FORMATS:
+# ==================
+# - PDF: Using PyMuPDF for efficient text extraction with layout preservation
+# - DOCX: Using python-docx for Microsoft Word document processing  
+# - EML: Using email library for email message parsing
+#
+# KEY FEATURES:
+# =============
+# 1. Multi-format Document Support: Automatic format detection and processing
+# 2. Structure-Aware Chunking: Intelligent text splitting that preserves context
+# 3. Large Document Handling: Efficient processing of documents >1MB
+# 4. Metadata Enrichment: Comprehensive metadata for enhanced retrieval
+# 5. Caching System: LRU cache for improved performance on repeated requests
+# 6. Error Resilience: Graceful handling of various document processing errors
+#
+# PROCESSING PIPELINE:
+# ====================
+# URL → Download → Format Detection → Text Extraction → Chunking → Metadata → Cache
+#
+# CHUNKING STRATEGY:
+# ==================
+# The system uses structure-aware chunking that:
+# - Detects document headers and sections
+# - Preserves semantic boundaries
+# - Optimizes chunk sizes for embedding models
+# - Maintains context through metadata
+# - Handles large documents through sectioning
+#
+# PERFORMANCE OPTIMIZATIONS:
+# ===========================
+# - Batched PDF processing to handle large files
+# - Memory-efficient text extraction
+# - Intelligent section size management
+# - LRU caching for document reuse
+# - Conservative chunk sizing for optimal embeddings
+#
+# ==============================================================================
 
 import email
 from functools import lru_cache
@@ -7,20 +51,46 @@ import docx
 import requests
 import tempfile
 from typing import List, Tuple, Optional
-import fitz
+import fitz  # PyMuPDF for PDF processing
 import re
 
 from langchain_core.documents import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 def _extract_text_from_pdf_batched(file_path: str, max_chars_per_batch: int = 500000) -> str:
-    """Extracts text from a PDF file using PyMuPDF with batching for large documents."""
+    """
+    Extract text from PDF files using PyMuPDF with intelligent batching.
+    
+    This function processes large PDF files in manageable batches to avoid
+    memory issues while maintaining text extraction quality. It handles
+    complex PDF layouts and preserves text structure.
+    
+    Args:
+        file_path (str): Path to the PDF file to process
+        max_chars_per_batch (int): Maximum characters per processing batch
+                                   (default: 500,000 for optimal memory usage)
+    
+    Returns:
+        str: Complete extracted text from the PDF document
+        
+    Process:
+        1. Open PDF document using PyMuPDF
+        2. Calculate optimal batch size based on total pages
+        3. Process pages in batches to manage memory
+        4. Accumulate text while monitoring batch size
+        5. Return complete document text
+        
+    Note:
+        This batched approach is particularly important for large documents
+        (>100 pages) where memory usage could become problematic.
+    """
     doc = fitz.open(file_path)
     text = ""
     total_pages = len(doc)
     
     # Process pages in batches to avoid memory issues
-    batch_size = max(1, total_pages // 10)  # Process in ~10 batches
+    # Calculate batch size: aim for ~10 batches for optimal performance
+    batch_size = max(1, total_pages // 10)
     current_batch_text = ""
     
     for page_num in range(total_pages):
@@ -29,12 +99,12 @@ def _extract_text_from_pdf_batched(file_path: str, max_chars_per_batch: int = 50
         
         current_batch_text += page_text
         
-        # If batch is getting too large, process it
+        # If batch is getting too large, process it and start new batch
         if len(current_batch_text) > max_chars_per_batch:
             text += current_batch_text
             current_batch_text = ""
     
-    # Add remaining text
+    # Add any remaining text from the last batch
     if current_batch_text:
         text += current_batch_text
     
