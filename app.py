@@ -1,22 +1,18 @@
 # FASTAPI APPLICATION - MAIN SERVER
 
-from typing import List
 from functools import lru_cache
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS 
 from langchain_openai import ChatOpenAI
 
-import math
-from openai import RateLimitError
 
 from schemas import HackathonInput, HackathonOutput
 from document_processor import build_knowledge_base_from_urls
 from rag_chain import create_rag_chain
 
-import os
 from dotenv import load_dotenv
 
 # Load environment variables first

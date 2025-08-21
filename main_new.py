@@ -1,13 +1,5 @@
-# ==============================================================================
-#
-#      HACKATHON SUBMISSION: ADVANCED DOCUMENT Q&A SYSTEM (OpenAI & Pinecone)
-#
-# This script implements the required FastAPI endpoint (/hackrx/run) to
-# answer questions based on online documents. It uses a multi-step RAG
-# pipeline with OpenAI models and a Pinecone vector database.
-#
+#HACKATHON SUBMISSION: ADVANCED DOCUMENT Q&A SYSTEM
 # This is the main entry point that imports from modular components.
-# ==============================================================================
 
 from app import app
 

@@ -6,12 +6,11 @@ import os
 import docx
 import requests
 import tempfile
-from typing import List, Tuple, Optional
+from typing import List, Tuple 
 import fitz
 import re
 
 from langchain_core.documents import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 def _extract_text_from_pdf_batched(file_path: str, max_chars_per_batch: int = 500000) -> str:
     """Extracts text from a PDF file using PyMuPDF with batching for large documents."""
